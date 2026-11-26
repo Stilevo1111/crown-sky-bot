@@ -3,7 +3,9 @@ import express from 'express';
 import { Bot, InlineKeyboard } from 'grammy';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import {
+  sql,
   getNews,
   getSeat,
   getUser,
@@ -360,6 +362,15 @@ try {
     can_join_groups: true, can_read_all_group_messages: false,
     supports_inline_queries: false, can_connect_to_business: false, has_main_web_app: false
   };
+}
+
+// Схема создаётся автоматически при старте — не нужно вручную запускать init-db
+try {
+  const schema = await readFile(resolve(here, 'schema.sql'), 'utf8');
+  await sql.unsafe(schema);
+  console.log('✅ Схема Neon проверена/создана');
+} catch (err) {
+  console.error('❌ Не удалось применить схему Neon:', err.message);
 }
 
 app.listen(PORT, async () => {
