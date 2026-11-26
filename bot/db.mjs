@@ -150,13 +150,13 @@ export async function ensureHalls(upto) {
     await sql`
       INSERT INTO seats (seat_id, hall_id, row_number, place, kind)
       SELECT i, ${h}, ((i - ${start}) / 12) + 1, ((i - ${start}) % 12) + 1, 'single'
-      FROM generate_series(${start}, ${start + 119}) AS i
+      FROM generate_series(${start}::int, ${(start + 119)}::int) AS i
       ON CONFLICT (seat_id) DO NOTHING
     `;
     await sql`
       INSERT INTO seats (seat_id, hall_id, row_number, place, kind)
       SELECT i, ${h}, 11, i - ${start + 119}, 'double'
-      FROM generate_series(${start + 120}, ${start + 125}) AS i
+      FROM generate_series(${(start + 120)}::int, ${(start + 125)}::int) AS i
       ON CONFLICT (seat_id) DO NOTHING
     `;
   }
