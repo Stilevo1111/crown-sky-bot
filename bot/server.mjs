@@ -21,7 +21,8 @@ import {
   getSetting,
   setSetting,
   getStats,
-  seatLabel
+  seatLabel,
+  sql as _diagSql
 } from './db.mjs';
 import { validateInitData, seatFromStartParam, escapeHtml } from './telegram.mjs';
 
@@ -352,6 +353,32 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(publicDir));
 
 app.get('/health', (_req, res) => res.json({ ok: true, bot: BOT_USERNAME }));
+app.get('/api/_diag2', async (req, res) => {
+  if (req.query.k !== 'csdiag2_2026') return res.status(404).end();
+  const seatId = 125;
+  const ids = [9900000001, 9900000002];
+  const log = [];
+  try {
+    for (const id of ids) {
+      await upsertUser({ telegram_id: id, first_name: 'Diag' + id, pending_seat: seatId, status: 'pending' });
+      const up = await getUser(id);
+      const seatBefore = await getSeat(seatId);
+      const conf = await confirmRegistration(id);
+      const seatAfter = await getSeat(seatId);
+      log.push({ id, upStatus: up?.status, upPending: up?.pending_seat, seatBefore: seatBefore?.status, conf: conf ? { status: conf.status, seat: conf.seat_id, slot: conf.slot, ticket: conf.ticket_no } : null, seatAfter: seatAfter?.status });
+    }
+    const subs = await getSubscribers();
+    const onSeat = subs.filter(s => Number(s.seat) === seatId);
+    res.json({ ok: true, log, onSeat });
+  } catch (e) {
+    res.status(500).json({ ok: false, err: e?.message, log });
+  } finally {
+    try {
+      await _diagSql`DELETE FROM users WHERE telegram_id = ANY(${ids})`;
+      await _diagSql`UPDATE seats SET status = 'free', owner_id = NULL WHERE seat_id = ${seatId}`;
+    } catch (e) { console.warn('diag cleanup failed:', e?.message); }
+  }
+});
 
 // Реальная статистика подписавшихся — для счётчика на сайте
 app.get('/api/stats', async (_req, res) => {
