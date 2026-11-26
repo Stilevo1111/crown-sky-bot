@@ -6,6 +6,17 @@ if (!process.env.DATABASE_URL) {
 
 export const sql = neon(process.env.DATABASE_URL);
 
+// Небольшой кэш, чтобы поток регистраций не будил Neon на каждый чих
+const cache = new Map();
+export function invalidateCache() { cache.clear(); }
+async function cached(key, ttlMs, fn) {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < ttlMs) return hit.val;
+  const val = await fn();
+  cache.set(key, { ts: Date.now(), val });
+  return val;
+}
+
 // Выполнение SQL-скрипта целиком (CREATE TABLE и т.д.) через пул connection
 export async function runSchema(schemaText) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -80,16 +91,16 @@ export async function confirmRegistration(telegramId) {
 
 // Подписчики для аватарок на креслах сайта и Mini App
 export async function getSubscribers() {
-  return sql`
+  return cached('subscribers', 30000, () => sql`
     SELECT u.seat_id AS seat, u.name, u.first_name, u.username, u.photo_url, u.ticket_no
     FROM users u
     WHERE u.status = 'confirmed' AND u.seat_id IS NOT NULL
     ORDER BY u.seat_id
-  `;
+  `);
 }
 
 export async function getReviews(limit = 30) {
-  return sql`SELECT * FROM reviews ORDER BY created_at DESC LIMIT ${limit}`;
+  return cached('reviews', 30000, () => sql`SELECT * FROM reviews ORDER BY created_at DESC LIMIT ${limit}`);
 }
 
 export async function addReview({ telegramId = null, name = 'Пилот', text = '', photoUrl = null }) {
@@ -101,7 +112,7 @@ export async function addReview({ telegramId = null, name = 'Пилот', text =
 }
 
 export async function getNews(limit = 5) {
-  return sql`SELECT * FROM news ORDER BY published_at DESC LIMIT ${limit}`;
+  return cached('news', 60000, () => sql`SELECT * FROM news ORDER BY published_at DESC LIMIT ${limit}`);
 }
 
 export async function addNews(title, body, photoUrl = null) {
@@ -144,12 +155,14 @@ export async function getHallCount() {
 }
 
 export async function getStats() {
-  const users = await sql`SELECT COUNT(*)::int AS n FROM users WHERE status = 'confirmed'`;
-  const seats = await sql`SELECT COUNT(*)::int AS n FROM seats WHERE status = 'taken'`;
-  return {
-    waiting: users[0]?.n || 0,
-    seats_taken: seats[0]?.n || 0
-  };
+  return cached('stats', 30000, async () => {
+    const users = await sql`SELECT COUNT(*)::int AS n FROM users WHERE status = 'confirmed'`;
+    const seats = await sql`SELECT COUNT(*)::int AS n FROM seats WHERE status = 'taken'`;
+    return {
+      waiting: users[0]?.n || 0,
+      seats_taken: seats[0]?.n || 0
+    };
+  });
 }
 
 export function seatLabel(seat) {

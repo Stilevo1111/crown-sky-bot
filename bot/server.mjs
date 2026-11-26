@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import {
   runSchema,
+  invalidateCache,
   getNews,
   getSeat,
   getUser,
@@ -145,6 +146,7 @@ bot.command('news_add', async ctx => {
     return;
   }
   await addNews(title.trim(), rest.join('|').trim());
+  invalidateCache();
   await ctx.reply('✅ Новость опубликована.');
 });
 
@@ -159,6 +161,7 @@ bot.callbackQuery('confirm', async ctx => {
     return;
   }
   await ctx.answerCallbackQuery('✅ Регистрация подтверждена');
+  invalidateCache();
   const seat = await getSeat(updated.pending_seat ?? updated.seat_id);
   await ctx.editMessageText(
     `🎉 <b>Регистрация подтверждена!</b>\n\nТвоё место: <b>${escapeHtml(seatLabel(seat))}</b>\nБилет: <b>${escapeHtml(updated.ticket_no || '—')}</b>\n\nКорабль «Гуль» ждёт первых пилотов. Держи связь — напишем, когда начнётся бета-тест.`,
@@ -281,6 +284,7 @@ app.post('/api/reviews', async (req, res) => {
       text,
       photoUrl: from?.photo_url || null
     });
+    invalidateCache();
     res.json({ ok: true, item });
   } catch (err) {
     console.error(err);
@@ -317,6 +321,7 @@ app.post('/api/register', async (req, res) => {
       status: existing?.status || 'pending'
     });
 
+    invalidateCache();
     res.json({
       ok: true,
       status: user.status,
@@ -336,6 +341,7 @@ app.post('/api/confirm', async (req, res) => {
       return res.status(401).json({ ok: false, error: 'invalid_init_data' });
     }
     const user = await confirmRegistration(parsed.user.id);
+    invalidateCache();
     res.json({ ok: Boolean(user), status: user?.status || null, seat_id: user?.seat_id || null, ticket_no: user?.ticket_no || null });
   } catch (err) {
     console.error(err);
