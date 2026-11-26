@@ -218,32 +218,32 @@ bot.command('connect', async ctx => {
   await ctx.reply(`✅ Группа подключена: ${ctx.chat.title || ctx.chat.id}. Теперь /post будет публиковать и сюда.`);
 });
 
-// Публикация поста: /post Текст  или  фото с подписью /post Текст
-bot.command('post', async ctx => {
+// Общая публикация поста
+async function publishPost(ctx, text, photo) {
   if (!ADMIN_IDS.has(String(ctx.from.id))) {
     await ctx.reply('⛔ Недостаточно прав.');
     return;
   }
-  const text = String(ctx.match || '').trim() || String(ctx.msg?.caption || '').replace(/^\/post\s*/i, '').trim();
-  const photo = ctx.msg?.photo?.length ? ctx.msg.photo[ctx.msg.photo.length - 1].file_id : null;
   if (!text && !photo) {
     await ctx.reply('Формат: /post Текст поста — или отправьте фото с подписью /post Текст');
     return;
   }
-
+  // Telegram не даёт подпись к фото длиннее 1024 символов
+  const safeText = escapeHtml(text).slice(0, 1000);
   const sent = [];
   for (const id of ADMIN_IDS) {
     try {
-      await sendPost(Number(id) || id, escapeHtml(text), photo);
+      await sendPost(Number(id) || id, safeText, photo);
       sent.push('личный чат');
     } catch (err) {
       console.warn('⚠️ Не удалось отправить в личный чат ' + id + ':', err.message);
+      sent.push('ошибка личного чата');
     }
   }
   const targetGroup = GROUP_CHAT_ID || await getSetting('group_chat_id').catch(() => null);
   if (targetGroup) {
     try {
-      await sendPost(targetGroup, escapeHtml(text), photo);
+      await sendPost(targetGroup, safeText, photo);
       sent.push('группа');
     } catch (err) {
       console.warn('⚠️ Не удалось отправить в группу:', err.message);
@@ -253,6 +253,21 @@ bot.command('post', async ctx => {
     sent.push('группа не подключена — отправьте /connect в группе');
   }
   await ctx.reply('✅ Пост опубликован: ' + sent.join(', '));
+}
+
+// Текстовый пост: /post Текст
+bot.command('post', async ctx => {
+  if (ctx.msg?.photo?.length) return; // фото обрабатывается отдельным хендлером ниже
+  await publishPost(ctx, String(ctx.match || '').trim(), null);
+});
+
+// Пост с фото: фото + подпись "/post Текст"
+bot.on('message:photo', async ctx => {
+  const caption = String(ctx.msg?.caption || '').trim();
+  if (!/^\/post\b/i.test(caption)) return;
+  const text = caption.replace(/^\/post\s*/i, '').trim();
+  const photo = ctx.msg.photo[ctx.msg.photo.length - 1].file_id;
+  await publishPost(ctx, text, photo);
 });
 
 // ─── Inline-кнопки ──────────────────────────────────────────────
