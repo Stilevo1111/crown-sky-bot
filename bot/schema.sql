@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   seat_id       INTEGER,
   status        TEXT NOT NULL DEFAULT 'new',
   ticket_no     TEXT,
+  invited_by    BIGINT,
   registered_at TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()

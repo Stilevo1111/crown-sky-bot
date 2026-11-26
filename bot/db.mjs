@@ -39,11 +39,11 @@ export async function getUser(telegramId) {
 
 export async function upsertUser(data) {
   const rows = await sql`
-    INSERT INTO users (telegram_id, username, first_name, photo_url, name, pending_seat, status, updated_at)
+    INSERT INTO users (telegram_id, username, first_name, photo_url, name, pending_seat, status, invited_by, updated_at)
     VALUES (
       ${data.telegram_id}, ${data.username || null}, ${data.first_name || null},
       ${data.photo_url || null}, ${data.name || null}, ${data.pending_seat ?? null},
-      ${data.status || 'new'}, now()
+      ${data.status || 'new'}, ${data.invited_by ?? null}, now()
     )
     ON CONFLICT (telegram_id) DO UPDATE SET
       username = COALESCE(EXCLUDED.username, users.username),
@@ -51,6 +51,7 @@ export async function upsertUser(data) {
       photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url),
       name = COALESCE(EXCLUDED.name, users.name),
       pending_seat = COALESCE(EXCLUDED.pending_seat, users.pending_seat),
+      invited_by = COALESCE(EXCLUDED.invited_by, users.invited_by),
       status = CASE WHEN users.status = 'confirmed' THEN users.status ELSE EXCLUDED.status END,
       updated_at = now()
     RETURNING *

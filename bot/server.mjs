@@ -98,6 +98,8 @@ async function sendPost(chatId, text, photoFileId) {
 bot.command('start', async ctx => {
   const payload = String(ctx.match || '').trim();
   const seatId = seatFromStartParam(payload);
+  const refMatch = /^ref_(\d+)$/.exec(payload);
+  const invitedBy = refMatch ? Number(refMatch[1]) : null;
   const seat = seatId != null ? await getSeat(seatId) : null;
 
   if (seatId != null && !seat) {
@@ -112,7 +114,8 @@ bot.command('start', async ctx => {
     first_name: from.first_name || null,
     photo_url: from.photo_url || null,
     pending_seat: seatId,
-    status: 'pending'
+    status: 'pending',
+    invited_by: invitedBy
   });
 
   const seatLine = seat
@@ -122,11 +125,13 @@ bot.command('start', async ctx => {
   let waiting = null;
   try { waiting = (await getStats()).waiting; } catch (err) {}
   const statsLine = waiting != null ? `\n\n👥 Уже <b>${waiting}</b> пилотов в списке.` : '';
+  const inviteLine = invitedBy ? `\n\n🤝 Вас пригласил пилот <b>${invitedBy}</b>.` : '';
 
   await ctx.reply(
     `👑 <b>CROWN SKY</b>\nНабор в бета-тест открыт!` +
     seatLine +
     statsLine +
+    inviteLine +
     `\n\nПодтверди регистрацию — и мы сообщим, когда небеса откроются.`,
     { parse_mode: 'HTML', reply_markup: mainKeyboard(payload) }
   );
@@ -162,6 +167,7 @@ bot.command('help', async ctx => {
     '• /news — последние новости\n' +
     '• /status — статус билета\n' +
     '• /help — эта справка\n' +
+    '• /invite — ссылка, чтобы позвать друга\n' +
     '• /post — опубликовать пост (только админ)\n' +
     '• /connect — подключить группу для постов (в группе)\n\n' +
     'В приложении можно выбрать место, оставить записку и следить за новостями.',
@@ -183,6 +189,19 @@ bot.command('news_add', async ctx => {
   await addNews(title.trim(), rest.join('|').trim());
   invalidateCache();
   await ctx.reply('✅ Новость опубликована.');
+});
+
+bot.command('invite', async ctx => {
+  const url = `https://t.me/${BOT_USERNAME}?start=ref_${ctx.from.id}`;
+  const shareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(url) +
+    '&text=' + encodeURIComponent('Полетаем вместе в Crown Sky? Забирай билет в бета-тест!');
+  await ctx.reply(
+    `🤝 <b>Пригласи друга</b>\n\nОтправь эту ссылку — и он попадёт к нам в бот:\n<code>${escapeHtml(url)}</code>\n\nРегистрация продолжится автоматически, и мы увидим, кто кого позвал.`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: new InlineKeyboard().url('📤 Поделиться', shareUrl)
+    }
+  );
 });
 
 // Подключить группу: отправить /connect прямо в нужной группе
