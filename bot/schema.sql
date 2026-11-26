@@ -40,6 +40,11 @@ CREATE TABLE IF NOT EXISTS news (
   published_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS bot_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS reviews (
   id           SERIAL PRIMARY KEY,
   telegram_id  BIGINT,

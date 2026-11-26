@@ -111,6 +111,19 @@ export async function addReview({ telegramId = null, name = 'Пилот', text =
   `;
 }
 
+export async function getSetting(key) {
+  const rows = await sql`SELECT value FROM bot_settings WHERE key = ${key} LIMIT 1`;
+  return rows[0]?.value || null;
+}
+
+export async function setSetting(key, value) {
+  await sql`
+    INSERT INTO bot_settings (key, value) VALUES (${key}, ${value})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  invalidateCache();
+}
+
 export async function getNews(limit = 5) {
   return cached('news', 60000, () => sql`SELECT * FROM news ORDER BY published_at DESC LIMIT ${limit}`);
 }

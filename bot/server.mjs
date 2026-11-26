@@ -17,6 +17,8 @@ import {
   getReviews,
   addReview,
   ensureHalls,
+  getSetting,
+  setSetting,
   getStats,
   seatLabel
 } from './db.mjs';
@@ -160,7 +162,8 @@ bot.command('help', async ctx => {
     '• /news — последние новости\n' +
     '• /status — статус билета\n' +
     '• /help — эта справка\n' +
-    '• /post — опубликовать пост (только админ)\n\n' +
+    '• /post — опубликовать пост (только админ)\n' +
+    '• /connect — подключить группу для постов (в группе)\n\n' +
     'В приложении можно выбрать место, оставить записку и следить за новостями.',
     { parse_mode: 'HTML' }
   );
@@ -180,6 +183,20 @@ bot.command('news_add', async ctx => {
   await addNews(title.trim(), rest.join('|').trim());
   invalidateCache();
   await ctx.reply('✅ Новость опубликована.');
+});
+
+// Подключить группу: отправить /connect прямо в нужной группе
+bot.command('connect', async ctx => {
+  if (!ADMIN_IDS.has(String(ctx.from.id))) {
+    await ctx.reply('⛔ Недостаточно прав.');
+    return;
+  }
+  if (ctx.chat?.type === 'private') {
+    await ctx.reply('Отправьте /connect в той группе, куда бот должен публиковать посты.');
+    return;
+  }
+  await setSetting('group_chat_id', String(ctx.chat.id));
+  await ctx.reply(`✅ Группа подключена: ${ctx.chat.title || ctx.chat.id}. Теперь /post будет публиковать и сюда.`);
 });
 
 // Публикация поста: /post Текст  или  фото с подписью /post Текст
@@ -204,15 +221,17 @@ bot.command('post', async ctx => {
       console.warn('⚠️ Не удалось отправить в личный чат ' + id + ':', err.message);
     }
   }
-  if (GROUP_CHAT_ID) {
+  const targetGroup = GROUP_CHAT_ID || await getSetting('group_chat_id').catch(() => null);
+  if (targetGroup) {
     try {
-      await sendPost(GROUP_CHAT_ID, escapeHtml(text), photo);
+      await sendPost(targetGroup, escapeHtml(text), photo);
       sent.push('группа');
     } catch (err) {
       console.warn('⚠️ Не удалось отправить в группу:', err.message);
+      sent.push('ошибка отправки в группу');
     }
   } else {
-    sent.push('группа не задана (GROUP_CHAT_ID)');
+    sent.push('группа не подключена — отправьте /connect в группе');
   }
   await ctx.reply('✅ Пост опубликован: ' + sent.join(', '));
 });
