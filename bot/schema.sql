@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 
 -- Миграция для уже существующей базы
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_no TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by BIGINT;
 ALTER TABLE seats ADD COLUMN IF NOT EXISTS hall_id INTEGER;
 
 -- Первый зал
