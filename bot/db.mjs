@@ -126,13 +126,30 @@ export async function resetRegistration(telegramId, pendingSeat) {
 }
 
 // Подписчики для аватарок на креслах сайта и Mini App
+const API_ORIGIN = (process.env.PUBLIC_URL || 'https://bot-2bdu.onrender.com').replace(/\/$/, '');
+export function avatarUrl(telegramId) {
+  return `${API_ORIGIN}/api/avatar/${telegramId}`;
+}
+
+export async function setUserPhotoFile(telegramId, fileId) {
+  await sql`UPDATE users SET photo_file_id = ${fileId}, updated_at = now() WHERE telegram_id = ${telegramId}`;
+  invalidateCache();
+}
+
 export async function getSubscribers() {
-  return cached('subscribers', 30000, () => sql`
-    SELECT u.seat_id AS seat, u.slot, u.name, u.first_name, u.username, u.photo_url, u.ticket_no
-    FROM users u
-    WHERE u.status = 'confirmed' AND u.seat_id IS NOT NULL
-    ORDER BY u.seat_id, u.slot NULLS FIRST
-  `);
+  return cached('subscribers', 30000, async () => {
+    const rows = await sql`
+      SELECT u.seat_id AS seat, u.slot, u.name, u.first_name, u.username,
+             u.photo_url, u.photo_file_id, u.telegram_id, u.ticket_no
+      FROM users u
+      WHERE u.status = 'confirmed' AND u.seat_id IS NOT NULL
+      ORDER BY u.seat_id, u.slot NULLS FIRST
+    `;
+    return rows.map(r => ({
+      ...r,
+      photo_url: r.photo_url || (r.photo_file_id ? avatarUrl(r.telegram_id) : null)
+    }));
+  });
 }
 
 export async function getReviews(limit = 30) {
@@ -150,7 +167,7 @@ export async function addReview({ telegramId = null, name = 'Пилот', text =
 // Пилот по номеру билета — используется для доступа к запискам на сайте
 export async function getUserByTicket(ticketNo) {
   const rows = await sql`
-    SELECT telegram_id, name, first_name, username, photo_url, ticket_no, seat_id
+    SELECT telegram_id, name, first_name, username, photo_url, photo_file_id, ticket_no, seat_id
     FROM users
     WHERE ticket_no = ${ticketNo} AND status = 'confirmed'
     LIMIT 1

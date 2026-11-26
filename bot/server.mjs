@@ -22,7 +22,9 @@ import {
   getSetting,
   setSetting,
   getStats,
-  seatLabel
+  seatLabel,
+  avatarUrl,
+  setUserPhotoFile
 } from './db.mjs';
 import { validateInitData, seatFromStartParam, escapeHtml } from './telegram.mjs';
 
@@ -45,6 +47,25 @@ const publicDir = resolve(here, '..', 'site');
 
 const bot = new Bot(TOKEN);
 bot.catch(err => console.error('[bot error]', err));
+
+// Аватарка из профиля Telegram: держим file_id и отдаём через свой прокси,
+// чтобы не светить токен бота в ссылках на сайте.
+async function syncUserPhoto(telegramId) {
+  try {
+    if (!telegramId) return;
+    const u = await getUser(telegramId);
+    if (!u || u.photo_url || u.photo_file_id) return;
+    const photos = await bot.api.getUserProfilePhotos(telegramId, { limit: 1 });
+    const fileId = photos?.photos?.[0]?.slice(-1)?.[0]?.file_id;
+    if (fileId) await setUserPhotoFile(telegramId, fileId);
+  } catch (err) {
+    console.warn('⚠️ Не удалось получить аватарку:', err?.description || err?.message);
+  }
+}
+
+function photoFor(pilot) {
+  return pilot?.photo_url || (pilot?.photo_file_id ? avatarUrl(pilot.telegram_id) : null);
+}
 
 function webAppUrl(startParam = '') {
   return `${PUBLIC_URL}/webapp.html${startParam ? '?start=' + encodeURIComponent(startParam) : ''}`;
@@ -129,6 +150,7 @@ bot.command('start', async ctx => {
   if (seatId != null && existing?.status === 'confirmed' && existing.seat_id !== seatId) {
     await resetRegistration(from.id, seatId);
   }
+  await syncUserPhoto(from.id);
 
   const seatLine = seat
     ? `\n\n🎟 Твоё место: <b>${escapeHtml(seatLabel(seat))}</b>`
@@ -416,11 +438,16 @@ app.post('/api/verify-ticket', async (req, res) => {
     if (!ticket) return res.status(400).json({ ok: false, error: 'empty_ticket' });
     const pilot = await getUserByTicket(ticket);
     if (!pilot) return res.status(404).json({ ok: false, error: 'ticket_not_found' });
+    if (!pilot.photo_url && !pilot.photo_file_id) {
+      await syncUserPhoto(pilot.telegram_id);
+      const fresh = await getUserByTicket(ticket);
+      Object.assign(pilot, fresh || {});
+    }
     res.json({
       ok: true,
       ticket_no: pilot.ticket_no,
       name: pilot.name || pilot.first_name || pilot.username || 'Пилот',
-      photo_url: pilot.photo_url || null
+      photo_url: photoFor(pilot)
     });
   } catch (err) {
     console.error(err);
@@ -445,12 +472,14 @@ app.post('/api/reviews', async (req, res) => {
     }
     if (!pilot) return res.status(401).json({ ok: false, error: 'registration_required' });
 
-    const name = pilot.name || pilot.first_name || pilot.username || 'Пилот';
+    if (!pilot.photo_url && !pilot.photo_file_id) await syncUserPhoto(pilot.telegram_id);
+    const fresh = await getUser(pilot.telegram_id);
+    const name = fresh?.name || fresh?.first_name || fresh?.username || 'Пилот';
     const item = await addReview({
       telegramId: pilot.telegram_id,
       name,
       text,
-      photoUrl: pilot.photo_url || null
+      photoUrl: photoFor(fresh || pilot)
     });
     invalidateCache();
     res.json({ ok: true, item });
@@ -500,6 +529,7 @@ app.post('/api/register', async (req, res) => {
     if (seatId != null && existing?.status === 'confirmed' && existing.seat_id !== seatId) {
       await resetRegistration(from.id, seatId);
     }
+    await syncUserPhoto(from.id);
 
     invalidateCache();
     res.json({
@@ -521,11 +551,36 @@ app.post('/api/confirm', async (req, res) => {
       return res.status(401).json({ ok: false, error: 'invalid_init_data' });
     }
     const user = await confirmRegistration(parsed.user.id);
+    await syncUserPhoto(parsed.user.id);
     invalidateCache();
     res.json({ ok: Boolean(user), status: user?.status || null, seat_id: user?.seat_id || null, ticket_no: user?.ticket_no || null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false });
+  }
+});
+
+// Аватарка пилота через сервер: токен бота не попадает в HTML/CCL
+app.get('/api/avatar/:telegramId', async (req, res) => {
+  try {
+    const id = Number(req.params.telegramId);
+    if (!Number.isFinite(id)) return res.sendStatus(404);
+    let u = await getUser(id);
+    if (!u) return res.sendStatus(404);
+    if (!u.photo_url && !u.photo_file_id) {
+      await syncUserPhoto(id);
+      u = await getUser(id);
+    }
+    if (!u?.photo_file_id) return res.sendStatus(404);
+    const file = await bot.api.getFile(u.photo_file_id);
+    const r = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${file.file_path}`);
+    if (!r.ok) return res.sendStatus(404);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.type(r.headers.get('content-type') || 'image/jpeg');
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (err) {
+    console.warn('avatar proxy failed:', err?.message);
+    res.sendStatus(404);
   }
 });
 

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      TEXT,
   first_name    TEXT,
   photo_url     TEXT,
+  photo_file_id TEXT,
   name          TEXT,
   pending_seat  INTEGER,
   seat_id       INTEGER,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_no TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by BIGINT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS slot INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_file_id TEXT;
 UPDATE users SET slot = 1 WHERE status = 'confirmed' AND seat_id IS NOT NULL AND slot IS NULL;
 ALTER TABLE seats ADD COLUMN IF NOT EXISTS hall_id INTEGER;
 
