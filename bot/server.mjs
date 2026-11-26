@@ -216,11 +216,21 @@ bot.command('connect', async ctx => {
     return;
   }
   if (ctx.chat?.type === 'private') {
-    await ctx.reply('Отправьте /connect в той группе, куда бот должен публиковать посты.');
+    const current = GROUP_CHAT_ID || await getSetting('group_chat_id').catch(() => null);
+    await ctx.reply(
+      current
+        ? `Текущая группа для постов: <code>${escapeHtml(String(current))}</code>\nОтправьте /connect в нужной группе, чтобы изменить.`
+        : 'Группа не подключена. Отправьте /connect в той группе, куда бот должен публиковать посты.',
+      { parse_mode: 'HTML' }
+    );
     return;
   }
-  await setSetting('group_chat_id', String(ctx.chat.id));
-  await ctx.reply(`✅ Группа подключена: ${ctx.chat.title || ctx.chat.id}. Теперь /post будет публиковать и сюда.`);
+  const chatId = String(ctx.chat.id);
+  await setSetting('group_chat_id', chatId);
+  await ctx.reply(
+    `✅ Группа подключена: ${escapeHtml(ctx.chat.title || chatId)}\nID: <code>${escapeHtml(chatId)}</code>\nТеперь /post будет публиковать и сюда.`,
+    { parse_mode: 'HTML' }
+  );
 });
 
 // Общая публикация поста
@@ -251,8 +261,9 @@ async function publishPost(ctx, text, photo) {
       await sendPost(targetGroup, safeText, photo);
       sent.push('группа');
     } catch (err) {
-      console.warn('⚠️ Не удалось отправить в группу:', err.message);
-      sent.push('ошибка отправки в группу');
+      const detail = err?.description || err?.message || 'unknown error';
+      console.warn(`⚠️ Не удалось отправить в группу ${targetGroup}:`, detail);
+      sent.push(`ошибка отправки в группу ${targetGroup} (${detail})`);
     }
   } else {
     sent.push('группа не подключена — отправьте /connect в группе');
