@@ -12,6 +12,7 @@ import {
   getUser,
   upsertUser,
   confirmRegistration,
+  resetRegistration,
   addNews,
   getSubscribers,
   getReviews,
@@ -108,6 +109,7 @@ bot.command('start', async ctx => {
   }
 
   const from = ctx.from;
+  const existing = await getUser(from.id);
   await upsertUser({
     telegram_id: from.id,
     username: from.username || null,
@@ -117,6 +119,9 @@ bot.command('start', async ctx => {
     status: 'pending',
     invited_by: invitedBy
   });
+  if (seatId != null && existing?.status === 'confirmed' && existing.seat_id !== seatId) {
+    await resetRegistration(from.id, seatId);
+  }
 
   const seatLine = seat
     ? `\n\n🎟 Твоё место: <b>${escapeHtml(seatLabel(seat))}</b>`
@@ -421,16 +426,16 @@ app.post('/api/register', async (req, res) => {
     }
 
     const from = parsed.user;
+    const existing = await getUser(from.id);
     const seatId = seatFromStartParam(startParam || parsed.startParam);
     if (seatId != null) {
       const seat = await getSeat(seatId);
       if (!seat) return res.status(400).json({ ok: false, error: 'unknown_seat' });
-      if (seat.status === 'taken' && seat.owner_id !== from.id) {
+      if (seat.status === 'taken' && existing?.seat_id !== seatId) {
         return res.status(409).json({ ok: false, error: 'seat_taken' });
       }
     }
 
-    const existing = await getUser(from.id);
     const user = await upsertUser({
       telegram_id: from.id,
       username: from.username || null,
@@ -440,6 +445,9 @@ app.post('/api/register', async (req, res) => {
       pending_seat: seatId ?? existing?.pending_seat ?? null,
       status: existing?.status || 'pending'
     });
+    if (seatId != null && existing?.status === 'confirmed' && existing.seat_id !== seatId) {
+      await resetRegistration(from.id, seatId);
+    }
 
     invalidateCache();
     res.json({

@@ -101,13 +101,37 @@ export async function confirmRegistration(telegramId) {
   return updated;
 }
 
+// Пользователь перешёл по новой ссылке на место — освобождаем старое
+export async function resetRegistration(telegramId, pendingSeat) {
+  const old = await getUser(telegramId);
+  if (!old || old.seat_id == null) return;
+  if (pendingSeat == null || pendingSeat === old.seat_id) return;
+
+  const countRows = await sql`
+    SELECT COUNT(*)::int AS n FROM users
+    WHERE seat_id = ${old.seat_id} AND status = 'confirmed'
+  `;
+  const rest = Math.max(0, (countRows[0]?.n || 0) - 1);
+  await sql`
+    UPDATE seats SET status = ${rest > 0 ? 'partial' : 'free'}, owner_id = NULL
+    WHERE seat_id = ${old.seat_id}
+  `;
+  await sql`
+    UPDATE users
+    SET status = 'pending', seat_id = NULL, slot = NULL, pending_seat = ${pendingSeat},
+        ticket_no = NULL, registered_at = NULL, updated_at = now()
+    WHERE telegram_id = ${telegramId}
+  `;
+  invalidateCache();
+}
+
 // Подписчики для аватарок на креслах сайта и Mini App
 export async function getSubscribers() {
   return cached('subscribers', 30000, () => sql`
     SELECT u.seat_id AS seat, u.slot, u.name, u.first_name, u.username, u.photo_url, u.ticket_no
     FROM users u
     WHERE u.status = 'confirmed' AND u.seat_id IS NOT NULL
-    ORDER BY u.seat_id
+    ORDER BY u.seat_id, u.slot NULLS FIRST
   `);
 }
 

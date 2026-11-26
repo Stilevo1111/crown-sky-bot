@@ -32,10 +32,14 @@ export function validateInitData(initData, token) {
     user = null;
   }
 
+  const authDate = Number(params.get('auth_date') || 0);
+  // Защита от повторного использования старых initData (сутки)
+  if (!authDate || Math.abs(Date.now() / 1000 - authDate) > 86400) return null;
+
   return {
     user,
     startParam: params.get('start_param') || '',
-    authDate: Number(params.get('auth_date') || 0)
+    authDate
   };
 }
 
