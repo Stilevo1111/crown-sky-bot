@@ -269,7 +269,7 @@ bot.command('top', async ctx => {
     `${medals[i] || (i + 1) + '.'} ${escapeHtml(p.name)} — ${p.invited} ${p.invited === 1 ? 'пилот' : 'пилотов'}`
   );
   await ctx.reply(
-    `🏆 <b>Топ-10 по приглашениям</b>\n\n${lines.join('\n')}\n\nПризы: эксклюзивные награды в игре — детали объявим отдельно.`,
+    `🏆 <b>Топ по приглашениям</b>\n\n${lines.join('\n')}`,
     { parse_mode: 'HTML' }
   );
 });
