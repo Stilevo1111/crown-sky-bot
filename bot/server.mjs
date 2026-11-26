@@ -72,14 +72,23 @@ function webAppUrl(startParam = '') {
   return `${PUBLIC_URL}/webapp.html${startParam ? '?start=' + encodeURIComponent(startParam) : ''}`;
 }
 
-function mainKeyboard(startParam = '') {
-  return new InlineKeyboard()
-    .webApp('🚀 Продолжить в приложении', webAppUrl(startParam))
-    .row()
+// В группах Telegram не принимает web_app-кнопки — там используем обычную ссылку
+function addWebAppButton(kb, chatId, label, startParam = '') {
+  const url = webAppUrl(startParam);
+  if (chatId != null && String(chatId).startsWith('-')) kb.url(label, url);
+  else kb.webApp(label, url);
+  return kb;
+}
+
+function mainKeyboard(startParam = '', chatId = null) {
+  const kb = new InlineKeyboard();
+  addWebAppButton(kb, chatId, '🚀 Продолжить в приложении', startParam);
+  kb.row()
     .text('✅ Подтвердить регистрацию', 'confirm')
     .text('📰 Новости', 'news')
     .row()
     .text('🎟 Мой билет', 'status');
+  return kb;
 }
 
 function newsText(items) {
@@ -90,13 +99,8 @@ function newsText(items) {
 }
 
 function postKeyboard(chatId) {
-  const isGroup = String(chatId).startsWith('-');
-  const regUrl = isGroup
-    ? (PUBLIC_URL ? `${PUBLIC_URL}/webapp.html?start=register` : `https://t.me/${BOT_USERNAME}?start=register`)
-    : null;
   const kb = new InlineKeyboard();
-  if (isGroup) kb.url('🎟 Занять место', regUrl);
-  else kb.webApp('🎟 Занять место', webAppUrl());
+  addWebAppButton(kb, chatId, '🎟 Занять место', 'register');
   kb.row()
     .url('🌐 Открыть сайт', PUBLIC_URL || `https://t.me/${BOT_USERNAME}`)
     .url('🤖 Открыть бота', `https://t.me/${BOT_USERNAME}?start=register`);
@@ -168,16 +172,15 @@ bot.command('start', async ctx => {
     statsLine +
     inviteLine +
     `\n\nПодтверди регистрацию — и мы сообщим, когда небеса откроются.`,
-    { parse_mode: 'HTML', reply_markup: mainKeyboard(payload) }
+    { parse_mode: 'HTML', reply_markup: mainKeyboard(payload, ctx.chat?.id) }
   );
 });
 
 bot.command('news', async ctx => {
   const items = await getNews(3);
-  await ctx.reply(newsText(items), {
-    parse_mode: 'HTML',
-    reply_markup: new InlineKeyboard().webApp('📄 Все новости', webAppUrl())
-  });
+  const kb = new InlineKeyboard();
+  addWebAppButton(kb, ctx.chat?.id, '📄 Все новости');
+  await ctx.reply(newsText(items), { parse_mode: 'HTML', reply_markup: kb });
 });
 
 bot.command('status', async ctx => {
@@ -191,7 +194,7 @@ bot.command('status', async ctx => {
   const status = user.status === 'confirmed' ? '✅ Подтверждена' : '⏳ Ожидает подтверждения';
   await ctx.reply(
     `🎟 <b>Твой билет</b>\n\nСтатус: <b>${status}</b>\nМесто: <b>${escapeHtml(seatLabel(seat))}</b>\nИмя: <b>${escapeHtml(user.name || user.first_name || 'Гость')}</b>`,
-    { parse_mode: 'HTML', reply_markup: mainKeyboard() }
+    { parse_mode: 'HTML', reply_markup: mainKeyboard('', ctx.chat?.id) }
   );
 });
 
@@ -321,9 +324,9 @@ bot.callbackQuery('confirm', async ctx => {
   const updated = await confirmRegistration(ctx.from.id);
   if (!updated) {
     await ctx.answerCallbackQuery('Место уже занято или ссылка устарела — выбери другое');
-    await ctx.reply('Выбери место в приложении, затем нажми «Подтвердить регистрацию».', {
-      reply_markup: new InlineKeyboard().webApp('🚀 Открыть приложение', webAppUrl())
-    });
+    const kb = new InlineKeyboard();
+    addWebAppButton(kb, ctx.chat?.id, '🚀 Открыть приложение');
+    await ctx.reply('Выбери место в приложении, затем нажми «Подтвердить регистрацию».', { reply_markup: kb });
     return;
   }
   await ctx.answerCallbackQuery('✅ Регистрация подтверждена');
@@ -337,10 +340,9 @@ bot.callbackQuery('confirm', async ctx => {
 
 bot.callbackQuery('news', async ctx => {
   await ctx.answerCallbackQuery();
-  await ctx.reply(newsText(await getNews(3)), {
-    parse_mode: 'HTML',
-    reply_markup: new InlineKeyboard().webApp('📄 Все новости', webAppUrl())
-  });
+  const kb = new InlineKeyboard();
+  addWebAppButton(kb, ctx.chat?.id, '📄 Все новости');
+  await ctx.reply(newsText(await getNews(3)), { parse_mode: 'HTML', reply_markup: kb });
 });
 
 bot.callbackQuery('status', async ctx => {
@@ -354,7 +356,7 @@ bot.callbackQuery('status', async ctx => {
   const seat = seatId != null ? await getSeat(seatId) : null;
   await ctx.reply(
     `🎟 <b>Твой билет</b>\n\nСтатус: <b>${user.status === 'confirmed' ? '✅ Подтверждена' : '⏳ Ожидает подтверждения'}</b>\nМесто: <b>${escapeHtml(seatLabel(seat))}</b>`,
-    { parse_mode: 'HTML', reply_markup: mainKeyboard() }
+    { parse_mode: 'HTML', reply_markup: mainKeyboard('', ctx.chat?.id) }
   );
 });
 
