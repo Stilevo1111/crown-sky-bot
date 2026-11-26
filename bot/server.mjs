@@ -24,7 +24,8 @@ import {
   getStats,
   seatLabel,
   avatarUrl,
-  setUserPhotoFile
+  setUserPhotoFile,
+  getUsersNeedingPhoto
 } from './db.mjs';
 import { validateInitData, seatFromStartParam, escapeHtml } from './telegram.mjs';
 
@@ -633,6 +634,14 @@ try {
   console.log('✅ Схема Neon проверена/создана');
 } catch (err) {
   console.error('❌ Не удалось применить схему Neon:', err.message);
+}
+
+// Подтягиваем аватарки уже зарегистрированным пилотам, у которых их нет
+try {
+  const needing = await getUsersNeedingPhoto();
+  for (const u of needing) await syncUserPhoto(u.telegram_id);
+} catch (err) {
+  console.warn('⚠️ Не удалось обновить аватарки:', err.message);
 }
 
 app.listen(PORT, async () => {

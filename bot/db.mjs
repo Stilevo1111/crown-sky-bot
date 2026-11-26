@@ -131,6 +131,13 @@ export function avatarUrl(telegramId) {
   return `${API_ORIGIN}/api/avatar/${telegramId}`;
 }
 
+export async function getUsersNeedingPhoto() {
+  return sql`
+    SELECT telegram_id FROM users
+    WHERE status = 'confirmed' AND photo_url IS NULL AND photo_file_id IS NULL
+  `;
+}
+
 export async function setUserPhotoFile(telegramId, fileId) {
   await sql`UPDATE users SET photo_file_id = ${fileId}, updated_at = now() WHERE telegram_id = ${telegramId}`;
   invalidateCache();
