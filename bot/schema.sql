@@ -91,3 +91,8 @@ DELETE FROM reviews WHERE text IN (
   'Оставлю записку: сделайте больше островов с уютными домиками 🙂',
   'Когда уже можно будет зайти? Готов тестировать каждый вечер.'
 );
+
+-- Удалить тестовую регистрацию, оставленную при проверке API
+UPDATE seats SET status = 'free', owner_id = NULL
+WHERE owner_id IN (SELECT telegram_id FROM users WHERE name = 'Проверка');
+DELETE FROM users WHERE name = 'Проверка';

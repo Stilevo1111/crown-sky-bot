@@ -229,7 +229,7 @@ async function publishPost(ctx, text, photo) {
     return;
   }
   // Telegram не даёт подпись к фото длиннее 1024 символов
-  const safeText = escapeHtml(text).slice(0, 1000);
+  const safeText = escapeHtml(text.slice(0, 1000));
   const sent = [];
   for (const id of ADMIN_IDS) {
     try {
