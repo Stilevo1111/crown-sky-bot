@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import {
-  sql,
+  runSchema,
   getNews,
   getSeat,
   getUser,
@@ -367,7 +367,7 @@ try {
 // Схема создаётся автоматически при старте — не нужно вручную запускать init-db
 try {
   const schema = await readFile(resolve(here, 'schema.sql'), 'utf8');
-  await sql.unsafe(schema);
+  await runSchema(schema);
   console.log('✅ Схема Neon проверена/создана');
 } catch (err) {
   console.error('❌ Не удалось применить схему Neon:', err.message);

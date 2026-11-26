@@ -1,10 +1,20 @@
-import { neon } from '@neondatabase/serverless';
+import { neon, Pool } from '@neondatabase/serverless';
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL не задан. Скопируйте .env.example в .env и заполните его.');
 }
 
 export const sql = neon(process.env.DATABASE_URL);
+
+// Выполнение SQL-скрипта целиком (CREATE TABLE и т.д.) через пул connection
+export async function runSchema(schemaText) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query(schemaText);
+  } finally {
+    await pool.end();
+  }
+}
 
 export async function getSeat(id) {
   const rows = await sql`SELECT * FROM seats WHERE seat_id = ${id} LIMIT 1`;
