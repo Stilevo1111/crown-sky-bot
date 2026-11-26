@@ -59,6 +59,7 @@ start - Начать регистрацию в бета-тест
 news - Последние новости
 status - Статус моего билета
 help - Справка
+post - Опубликовать пост (админ)
 ```
 
 3. `/setmenubutton` — после деплоя (шаг 4):
@@ -96,6 +97,7 @@ Dashboard → **New** → **Web Service** → ваш GitHub-репозитори
 | `WEBHOOK_SECRET` | случайная строка (Blueprint генерирует сам) |
 | `SET_WEBHOOK` | `true` |
 | `ADMIN_IDS` | ваш Telegram ID (у @userinfobot) |
+| `GROUP_CHAT_ID` | ID группы/канала для постов `/post` (или `@username`) |
 | `NODE_VERSION` | `20` |
 
 Больше никаких `PUBLIC_SITE_URL` / `SITE_ORIGIN` не нужно.

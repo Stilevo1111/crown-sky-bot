@@ -25,3 +25,5 @@ services:
         value: true
       - key: ADMIN_IDS
         sync: false
+      - key: GROUP_CHAT_ID
+        sync: false

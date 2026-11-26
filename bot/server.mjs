@@ -33,6 +33,8 @@ const SET_WEBHOOK = String(process.env.SET_WEBHOOK || 'true').toLowerCase() === 
 const ADMIN_IDS = new Set(
   (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
 );
+// Куда публиковать посты (/post):groupId или @channel
+const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID || '';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = resolve(here, '..', 'site');
@@ -59,6 +61,35 @@ function newsText(items) {
   return '📰 <b>Новости Crown Sky</b>\n\n' + items
     .map(n => `✦ <b>${escapeHtml(n.title)}</b>\n${escapeHtml(n.body)}`)
     .join('\n\n');
+}
+
+function postKeyboard() {
+  return new InlineKeyboard()
+    .webApp('🎟 Занять место', webAppUrl())
+    .row()
+    .url('🌐 Открыть сайт', PUBLIC_URL || 'https://t.me/' + BOT_USERNAME)
+    .url('🤖 Открыть бота', `https://t.me/${BOT_USERNAME}?start=register`);
+}
+
+async function sendPost(chatId, text, photoFileId) {
+  const base = {
+    parse_mode: 'HTML',
+    reply_markup: postKeyboard()
+  };
+  const msg = photoFileId
+    ? await bot.api.sendPhoto(chatId, photoFileId, { ...base, caption: text || '📢 Crown Sky' })
+    : await bot.api.sendMessage(chatId, text || '📢 Crown Sky', base);
+
+  // Реакции «сердечко» и «разбитое сердечко»
+  try {
+    await bot.api.setMessageReaction(chatId, msg.message_id, [
+      { type: 'emoji', emoji: '❤️' },
+      { type: 'emoji', emoji: '💔' }
+    ]);
+  } catch (err) {
+    console.warn('⚠️ Не удалось поставить реакции:', err.message);
+  }
+  return msg.message_id;
 }
 
 // ─── Команды бота ───────────────────────────────────────────────
@@ -128,7 +159,8 @@ bot.command('help', async ctx => {
     '• /start — начать регистрацию (или продолжить с ссылки с сайта)\n' +
     '• /news — последние новости\n' +
     '• /status — статус билета\n' +
-    '• /help — эта справка\n\n' +
+    '• /help — эта справка\n' +
+    '• /post — опубликовать пост (только админ)\n\n' +
     'В приложении можно выбрать место, оставить записку и следить за новостями.',
     { parse_mode: 'HTML' }
   );
@@ -148,6 +180,41 @@ bot.command('news_add', async ctx => {
   await addNews(title.trim(), rest.join('|').trim());
   invalidateCache();
   await ctx.reply('✅ Новость опубликована.');
+});
+
+// Публикация поста: /post Текст  или  фото с подписью /post Текст
+bot.command('post', async ctx => {
+  if (!ADMIN_IDS.has(String(ctx.from.id))) {
+    await ctx.reply('⛔ Недостаточно прав.');
+    return;
+  }
+  const text = String(ctx.match || '').trim() || String(ctx.msg?.caption || '').replace(/^\/post\s*/i, '').trim();
+  const photo = ctx.msg?.photo?.length ? ctx.msg.photo[ctx.msg.photo.length - 1].file_id : null;
+  if (!text && !photo) {
+    await ctx.reply('Формат: /post Текст поста — или отправьте фото с подписью /post Текст');
+    return;
+  }
+
+  const sent = [];
+  for (const id of ADMIN_IDS) {
+    try {
+      await sendPost(Number(id) || id, escapeHtml(text), photo);
+      sent.push('личный чат');
+    } catch (err) {
+      console.warn('⚠️ Не удалось отправить в личный чат ' + id + ':', err.message);
+    }
+  }
+  if (GROUP_CHAT_ID) {
+    try {
+      await sendPost(GROUP_CHAT_ID, escapeHtml(text), photo);
+      sent.push('группа');
+    } catch (err) {
+      console.warn('⚠️ Не удалось отправить в группу:', err.message);
+    }
+  } else {
+    sent.push('группа не задана (GROUP_CHAT_ID)');
+  }
+  await ctx.reply('✅ Пост опубликован: ' + sent.join(', '));
 });
 
 // ─── Inline-кнопки ──────────────────────────────────────────────
