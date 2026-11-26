@@ -1,7 +1,7 @@
 services:
   # Сайт + Mini App + бот + API на одном сервисе, база — Neon
   - type: web
-    name: crown-sky
+    name: bot-2bdu
     runtime: node
     plan: free
     region: frankfurt
