@@ -724,6 +724,20 @@ async function setupBotCommands() {
 }
 setupBotCommands();
 
+// Как в fissure-bot: сами пингуем свой /health, чтобы Render Free не усыплял сервис.
+// Входящий запрос к /health сбрасывает таймер сна и заодно прогревает Neon.
+if (PUBLIC_URL && String(process.env.KEEP_ALIVE || 'true').toLowerCase() !== 'false') {
+  setInterval(async () => {
+    try {
+      const r = await fetch(`${PUBLIC_URL}/health`, { signal: AbortSignal.timeout(30000) });
+      await r.text();
+      console.log('💓 keep-alive ping sent');
+    } catch (err) {
+      console.warn('⚠️ keep-alive ping error:', err?.message);
+    }
+  }, 13 * 60 * 1000).unref();
+}
+
 app.listen(PORT, async () => {
   console.log(`✅ Crown Sky сервер запущен на порту ${PORT}`);
   console.log(`   Сайт:      ${PUBLIC_URL || 'http://localhost:' + PORT}/`);
