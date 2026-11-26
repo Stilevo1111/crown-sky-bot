@@ -444,6 +444,15 @@ app.post('/api/register', async (req, res) => {
 
     const from = parsed.user;
     const existing = await getUser(from.id);
+    // Уже зарегистрированный пилот не должен проходить регистрацию повторно
+    if (existing?.status === 'confirmed' && existing.seat_id != null) {
+      return res.status(409).json({
+        ok: false,
+        error: 'already_registered',
+        seat_id: existing.seat_id,
+        ticket_no: existing.ticket_no || null
+      });
+    }
     const seatId = seatFromStartParam(startParam || parsed.startParam);
     if (seatId != null) {
       const seat = await getSeat(seatId);
@@ -488,6 +497,27 @@ app.post('/api/confirm', async (req, res) => {
     const user = await confirmRegistration(parsed.user.id);
     invalidateCache();
     res.json({ ok: Boolean(user), status: user?.status || null, seat_id: user?.seat_id || null, ticket_no: user?.ticket_no || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// Статус текущего пилота — чтобы Mini App не предлагала повторную регистрацию
+app.post('/api/me', async (req, res) => {
+  try {
+    const parsed = validateInitData(req.body?.initData, TOKEN);
+    if (!parsed || !parsed.user?.id) {
+      return res.status(401).json({ ok: false, error: 'invalid_init_data' });
+    }
+    const user = await getUser(parsed.user.id);
+    res.json({
+      ok: true,
+      status: user?.status || null,
+      seat_id: user?.seat_id ?? user?.pending_seat ?? null,
+      ticket_no: user?.ticket_no || null,
+      name: user?.name || user?.first_name || null
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false });
