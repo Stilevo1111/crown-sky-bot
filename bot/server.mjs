@@ -66,18 +66,24 @@ function newsText(items) {
     .join('\n\n');
 }
 
-function postKeyboard() {
-  return new InlineKeyboard()
-    .webApp('🎟 Занять место', webAppUrl())
-    .row()
-    .url('🌐 Открыть сайт', PUBLIC_URL || 'https://t.me/' + BOT_USERNAME)
+function postKeyboard(chatId) {
+  const isGroup = String(chatId).startsWith('-');
+  const regUrl = isGroup
+    ? (PUBLIC_URL ? `${PUBLIC_URL}/webapp.html?start=register` : `https://t.me/${BOT_USERNAME}?start=register`)
+    : null;
+  const kb = new InlineKeyboard();
+  if (isGroup) kb.url('🎟 Занять место', regUrl);
+  else kb.webApp('🎟 Занять место', webAppUrl());
+  kb.row()
+    .url('🌐 Открыть сайт', PUBLIC_URL || `https://t.me/${BOT_USERNAME}`)
     .url('🤖 Открыть бота', `https://t.me/${BOT_USERNAME}?start=register`);
+  return kb;
 }
 
 async function sendPost(chatId, text, photoFileId) {
   const base = {
     parse_mode: 'HTML',
-    reply_markup: postKeyboard()
+    reply_markup: postKeyboard(chatId)
   };
   const msg = photoFileId
     ? await bot.api.sendPhoto(chatId, photoFileId, { ...base, caption: text || '📢 Crown Sky' })
@@ -346,15 +352,6 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(publicDir));
 
 app.get('/health', (_req, res) => res.json({ ok: true, bot: BOT_USERNAME }));
-app.get('/api/_diag', async (req, res) => {
-  if (req.query.k !== 'csdiag2026') return res.status(404).end();
-  try {
-    const dbGroup = await getSetting('group_chat_id').catch(e => ({ err: e?.message }));
-    res.json({ ok: true, envGroup: GROUP_CHAT_ID || null, dbGroup });
-  } catch (e) {
-    res.status(500).json({ ok: false, err: e?.message });
-  }
-});
 
 // Реальная статистика подписавшихся — для счётчика на сайте
 app.get('/api/stats', async (_req, res) => {
