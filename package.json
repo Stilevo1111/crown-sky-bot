@@ -1,0 +1,22 @@
+{
+  "name": "crown-sky-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Crown Sky — Telegram bot, Mini App, news and registration on Neon + Render",
+  "scripts": {
+    "start": "node bot/server.mjs",
+    "dev": "node --watch bot/server.mjs",
+    "init-db": "node bot/scripts/init-db.mjs",
+    "webhook:info": "node bot/scripts/webhook-info.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "grammy": "^1.36.0"
+  }
+}

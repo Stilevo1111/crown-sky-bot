@@ -1,0 +1,27 @@
+services:
+  # Сайт + Mini App + бот + API на одном сервисе, база — Neon
+  - type: web
+    name: crown-sky
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: SET_WEBHOOK
+        value: true
+      - key: ADMIN_IDS
+        sync: false
