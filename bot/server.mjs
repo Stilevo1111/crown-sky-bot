@@ -216,7 +216,7 @@ bot.command('connect', async ctx => {
     return;
   }
   if (ctx.chat?.type === 'private') {
-    const current = GROUP_CHAT_ID || await getSetting('group_chat_id').catch(() => null);
+    const current = await getSetting('group_chat_id').catch(() => null) || GROUP_CHAT_ID;
     await ctx.reply(
       current
         ? `Текущая группа для постов: <code>${escapeHtml(String(current))}</code>\nОтправьте /connect в нужной группе, чтобы изменить.`
@@ -255,7 +255,7 @@ async function publishPost(ctx, text, photo) {
       sent.push('ошибка личного чата');
     }
   }
-  const targetGroup = GROUP_CHAT_ID || await getSetting('group_chat_id').catch(() => null);
+  const targetGroup = await getSetting('group_chat_id').catch(() => null) || GROUP_CHAT_ID;
   if (targetGroup) {
     try {
       await sendPost(targetGroup, safeText, photo);
