@@ -64,14 +64,25 @@ export async function confirmRegistration(telegramId) {
   if (!user || user.pending_seat == null) return null;
   if (user.status === 'confirmed' && user.seat_id != null) return user; // идемпотентно
 
-  const seatRows = await sql`SELECT status FROM seats WHERE seat_id = ${user.pending_seat}`;
-  if (!seatRows.length || seatRows[0].status === 'taken') return null; // место уже занято
+  const seatRows = await sql`SELECT kind, status FROM seats WHERE seat_id = ${user.pending_seat}`;
+  if (!seatRows.length) return null;
+  const isDouble = seatRows[0].kind === 'double';
+  const maxPlayers = isDouble ? 2 : 1;
+  const countRows = await sql`
+    SELECT COUNT(*)::int AS n FROM users
+    WHERE seat_id = ${user.pending_seat} AND status = 'confirmed'
+  `;
+  const occupied = countRows[0]?.n || 0;
+  if (occupied >= maxPlayers) return null; // диван заполнен или кресло занято
+  const slot = isDouble ? occupied + 1 : 1;
 
-  const ticketNo = 'CS-' + String(user.pending_seat).padStart(3, '0') + '-' + String(telegramId).slice(-4);
+  const ticketNo = 'CS-' + String(user.pending_seat).padStart(3, '0') +
+    '-' + String(telegramId).slice(-4) + (isDouble ? '-' + slot : '');
   const rows = await sql`
     UPDATE users
     SET status = 'confirmed',
         seat_id = ${user.pending_seat},
+        slot = ${slot},
         pending_seat = NULL,
         ticket_no = ${ticketNo},
         registered_at = now(),
@@ -83,7 +94,7 @@ export async function confirmRegistration(telegramId) {
 
   await sql`
     UPDATE seats
-    SET status = 'taken', owner_id = ${telegramId}
+    SET status = ${occupied + 1 >= maxPlayers ? 'taken' : 'partial'}, owner_id = ${telegramId}
     WHERE seat_id = ${user.pending_seat}
   `;
 
@@ -93,7 +104,7 @@ export async function confirmRegistration(telegramId) {
 // Подписчики для аватарок на креслах сайта и Mini App
 export async function getSubscribers() {
   return cached('subscribers', 30000, () => sql`
-    SELECT u.seat_id AS seat, u.name, u.first_name, u.username, u.photo_url, u.ticket_no
+    SELECT u.seat_id AS seat, u.slot, u.name, u.first_name, u.username, u.photo_url, u.ticket_no
     FROM users u
     WHERE u.status = 'confirmed' AND u.seat_id IS NOT NULL
     ORDER BY u.seat_id
@@ -171,7 +182,7 @@ export async function getHallCount() {
 export async function getStats() {
   return cached('stats', 30000, async () => {
     const users = await sql`SELECT COUNT(*)::int AS n FROM users WHERE status = 'confirmed'`;
-    const seats = await sql`SELECT COUNT(*)::int AS n FROM seats WHERE status = 'taken'`;
+    const seats = await sql`SELECT COUNT(DISTINCT seat_id)::int AS n FROM users WHERE status = 'confirmed' AND seat_id IS NOT NULL`;
     return {
       waiting: users[0]?.n || 0,
       seats_taken: seats[0]?.n || 0

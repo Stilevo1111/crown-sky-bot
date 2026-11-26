@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   status        TEXT NOT NULL DEFAULT 'new',
   ticket_no     TEXT,
   invited_by    BIGINT,
+  slot          INTEGER,
   registered_at TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 -- Миграция для уже существующей базы
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ticket_no TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by BIGINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS slot INTEGER;
 ALTER TABLE seats ADD COLUMN IF NOT EXISTS hall_id INTEGER;
 
 -- Первый зал
