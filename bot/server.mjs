@@ -26,8 +26,7 @@ import {
   avatarUrl,
   setUserPhotoFile,
   getUsersNeedingPhoto,
-  getTopReferrers,
-  sql as _diagSql
+  getTopReferrers
 } from './db.mjs';
 import { validateInitData, seatFromStartParam, escapeHtml } from './telegram.mjs';
 
@@ -411,20 +410,6 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(publicDir));
 
 app.get('/health', (_req, res) => res.json({ ok: true, bot: BOT_USERNAME }));
-app.get('/api/_topdiag', async (req, res) => {
-  if (req.query.k !== 'cstop2026') return res.status(404).end();
-  const ids = [9900000011, 9900000012];
-  try {
-    for (const id of ids) {
-      await _diagSql`INSERT INTO users (telegram_id, first_name, status, invited_by) VALUES (${id}, ${'RefTest' + id}, 'confirmed', ${8789376291}) ON CONFLICT (telegram_id) DO UPDATE SET status='confirmed', invited_by=${8789376291}`;
-    }
-    res.json({ ok: true, items: await getTopReferrers(10) });
-  } catch (e) {
-    res.status(500).json({ ok: false, err: e?.message });
-  } finally {
-    try { await _diagSql`DELETE FROM users WHERE telegram_id = ANY(${ids})`; } catch (e) {}
-  }
-});
 
 app.get('/api/top', async (req, res) => {
   try {
