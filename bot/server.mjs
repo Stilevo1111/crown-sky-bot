@@ -12,6 +12,7 @@ import {
   getUser,
   upsertUser,
   confirmRegistration,
+  getUserByTicket,
   resetRegistration,
   addNews,
   getSubscribers,
@@ -409,22 +410,47 @@ app.get('/api/reviews', async (_req, res) => {
   }
 });
 
+app.post('/api/verify-ticket', async (req, res) => {
+  try {
+    const ticket = String(req.body?.ticket_no || '').trim().toUpperCase().slice(0, 64);
+    if (!ticket) return res.status(400).json({ ok: false, error: 'empty_ticket' });
+    const pilot = await getUserByTicket(ticket);
+    if (!pilot) return res.status(404).json({ ok: false, error: 'ticket_not_found' });
+    res.json({
+      ok: true,
+      ticket_no: pilot.ticket_no,
+      name: pilot.name || pilot.first_name || pilot.username || 'Пилот',
+      photo_url: pilot.photo_url || null
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
 app.post('/api/reviews', async (req, res) => {
   try {
     const text = String(req.body?.text || '').trim().slice(0, 180);
     if (!text) return res.status(400).json({ ok: false, error: 'empty_text' });
 
-    // Если записка отправлена из Telegram — берем имя и аватарку пользователя.
+    // Записки доступны только зарегистрированным в боте пилотам.
     const parsed = validateInitData(req.body?.initData, TOKEN);
-    const from = parsed?.user;
-    const name = String(req.body?.name || '').trim().slice(0, 32) ||
-      from?.first_name || from?.username || 'Пилот';
+    let pilot = null;
+    if (parsed?.user?.id) {
+      const dbUser = await getUser(parsed.user.id);
+      if (dbUser?.status === 'confirmed') pilot = dbUser;
+    }
+    if (!pilot && req.body?.ticket_no) {
+      pilot = await getUserByTicket(String(req.body.ticket_no).trim().toUpperCase().slice(0, 64));
+    }
+    if (!pilot) return res.status(401).json({ ok: false, error: 'registration_required' });
 
+    const name = pilot.name || pilot.first_name || pilot.username || 'Пилот';
     const item = await addReview({
-      telegramId: from?.id || null,
+      telegramId: pilot.telegram_id,
       name,
       text,
-      photoUrl: from?.photo_url || null
+      photoUrl: pilot.photo_url || null
     });
     invalidateCache();
     res.json({ ok: true, item });

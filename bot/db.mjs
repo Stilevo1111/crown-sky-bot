@@ -147,6 +147,17 @@ export async function addReview({ telegramId = null, name = 'Пилот', text =
   `;
 }
 
+// Пилот по номеру билета — используется для доступа к запискам на сайте
+export async function getUserByTicket(ticketNo) {
+  const rows = await sql`
+    SELECT telegram_id, name, first_name, username, photo_url, ticket_no, seat_id
+    FROM users
+    WHERE ticket_no = ${ticketNo} AND status = 'confirmed'
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
 export async function getSetting(key) {
   const rows = await sql`SELECT value FROM bot_settings WHERE key = ${key} LIMIT 1`;
   return rows[0]?.value || null;
