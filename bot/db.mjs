@@ -195,6 +195,27 @@ export async function setSetting(key, value) {
   invalidateCache();
 }
 
+// Топ пилотов по приглашениям: считаем только подтверждённых рефералов
+export async function getTopReferrers(limit = 10) {
+  const rows = await sql`
+    SELECT inviter.telegram_id,
+           COALESCE(inviter.name, inviter.first_name, inviter.username, 'Пилот') AS name,
+           inviter.photo_url, inviter.photo_file_id,
+           COUNT(*)::int AS invited
+    FROM users u
+    JOIN users inviter ON inviter.telegram_id = u.invited_by
+    WHERE u.status = 'confirmed' AND u.invited_by IS NOT NULL
+    GROUP BY inviter.telegram_id, inviter.name, inviter.first_name,
+             inviter.username, inviter.photo_url, inviter.photo_file_id
+    ORDER BY invited DESC, inviter.telegram_id ASC
+    LIMIT ${Math.max(1, Math.min(50, Number(limit) || 10))}
+  `;
+  return rows.map(r => ({
+    ...r,
+    photo_url: r.photo_url || (r.photo_file_id ? avatarUrl(r.telegram_id) : null)
+  }));
+}
+
 export async function getNews(limit = 5) {
   return cached('news', 60000, () => sql`SELECT * FROM news ORDER BY published_at DESC LIMIT ${limit}`);
 }

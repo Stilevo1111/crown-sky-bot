@@ -25,7 +25,8 @@ import {
   seatLabel,
   avatarUrl,
   setUserPhotoFile,
-  getUsersNeedingPhoto
+  getUsersNeedingPhoto,
+  getTopReferrers
 } from './db.mjs';
 import { validateInitData, seatFromStartParam, escapeHtml } from './telegram.mjs';
 
@@ -218,6 +219,7 @@ bot.command('help', async ctx => {
     '• /status — статус билета\n' +
     '• /help — эта справка\n' +
     '• /invite — ссылка, чтобы позвать друга\n' +
+    '• /top — топ-10 по приглашениям\n' +
     '• /post — опубликовать пост (только админ)\n' +
     '• /connect — подключить группу для постов (в группе)\n\n' +
     'В приложении можно выбрать место, оставить записку и следить за новостями.',
@@ -251,6 +253,24 @@ bot.command('invite', async ctx => {
       parse_mode: 'HTML',
       reply_markup: new InlineKeyboard().url('📤 Поделиться', shareUrl)
     }
+  );
+});
+
+// Топ по реферальной системе
+bot.command('top', async ctx => {
+  if (isGroupChat(ctx.chat?.id)) return;
+  const top = await getTopReferrers(10).catch(() => []);
+  if (!top.length) {
+    await ctx.reply('🏆 Топ пригласивших пока пуст. Пригласи друзей командой /invite.');
+    return;
+  }
+  const medals = ['🥇', '🥈', '🥉'];
+  const lines = top.map((p, i) =>
+    `${medals[i] || (i + 1) + '.'} ${escapeHtml(p.name)} — ${p.invited} ${p.invited === 1 ? 'пилот' : 'пилотов'}`
+  );
+  await ctx.reply(
+    `🏆 <b>Топ-10 по приглашениям</b>\n\n${lines.join('\n')}\n\nПризы: эксклюзивные награды в игре — детали объявим отдельно.`,
+    { parse_mode: 'HTML' }
   );
 });
 
@@ -391,6 +411,16 @@ app.use(express.static(publicDir));
 
 app.get('/health', (_req, res) => res.json({ ok: true, bot: BOT_USERNAME }));
 
+app.get('/api/top', async (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 10;
+    res.json({ ok: true, items: await getTopReferrers(limit) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
 // Реальная статистика подписавшихся — для счётчика на сайте
 app.get('/api/stats', async (_req, res) => {
   try {
@@ -506,7 +536,7 @@ app.post('/api/reviews', async (req, res) => {
 
 app.post('/api/register', async (req, res) => {
   try {
-    const { initData, name, startParam } = req.body || {};
+    const { initData, name, startParam, ref } = req.body || {};
     const parsed = validateInitData(initData, TOKEN);
     if (!parsed || !parsed.user?.id) {
       return res.status(401).json({ ok: false, error: 'invalid_init_data' });
@@ -532,6 +562,8 @@ app.post('/api/register', async (req, res) => {
       }
     }
 
+    const refMatch = /^ref_(\d+)$/.exec(String(ref || parsed.startParam || ''));
+    const invitedBy = refMatch ? Number(refMatch[1]) : (existing?.invited_by ?? null);
     const user = await upsertUser({
       telegram_id: from.id,
       username: from.username || null,
@@ -539,7 +571,8 @@ app.post('/api/register', async (req, res) => {
       photo_url: from.photo_url || null,
       name: name ? String(name).slice(0, 32) : existing?.name || null,
       pending_seat: seatId ?? existing?.pending_seat ?? null,
-      status: existing?.status || 'pending'
+      status: existing?.status || 'pending',
+      invited_by: invitedBy
     });
     if (seatId != null && existing?.status === 'confirmed' && existing.seat_id !== seatId) {
       await resetRegistration(from.id, seatId);
@@ -667,6 +700,7 @@ async function setupBotCommands() {
       { command: 'news', description: 'Новости бета-теста' },
       { command: 'status', description: 'Мой билет' },
       { command: 'invite', description: 'Пригласить друга' },
+      { command: 'top', description: 'Топ-10 по приглашениям' },
       { command: 'help', description: 'Справка' },
       { command: 'post', description: 'Опубликовать пост (админ)' },
       { command: 'connect', description: 'Подключить группу (админ)' },
