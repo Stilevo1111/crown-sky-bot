@@ -395,6 +395,14 @@ bot.callbackQuery('status', async ctx => {
 // ─── HTTP-сервер: сайт, Web App и API ───────────────────────────
 const app = express();
 
+// Видимые в Render Logs обращения к API — помогает проверять, что сервис не спит
+app.use((req, res, next) => {
+  if (req.path === '/health' || req.path.startsWith('/api/')) {
+    console.log(new Date().toISOString(), req.method, req.path.split('?')[0]);
+  }
+  next();
+});
+
 // Сайт и API на одном домене — CORS всё равно оставляем на всякий случай.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
