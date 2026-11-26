@@ -72,18 +72,29 @@ function webAppUrl(startParam = '') {
   return `${PUBLIC_URL}/webapp.html${startParam ? '?start=' + encodeURIComponent(startParam) : ''}`;
 }
 
-// В группах Telegram не принимает web_app-кнопки — там используем обычную ссылку
+const isGroupChat = chatId => chatId != null && String(chatId).startsWith('-');
+const BETA_URL = PUBLIC_URL || 'https://crown-sky.onrender.com';
+const BOT_START_URL = `https://t.me/${BOT_USERNAME}?start=register`;
+
+// В группах Telegram не принимает web_app-кнопки — там только кнопки бета-теста
 function addWebAppButton(kb, chatId, label, startParam = '') {
-  const url = webAppUrl(startParam);
-  if (chatId != null && String(chatId).startsWith('-')) kb.url(label, url);
-  else kb.webApp(label, url);
+  if (isGroupChat(chatId)) return addBetaButtons(kb);
+  kb.webApp(label, webAppUrl(startParam));
+  return kb;
+}
+
+function addBetaButtons(kb) {
+  kb.url('🚀 Открыть бета-тест', BETA_URL)
+    .row()
+    .url('🤖 Зарегистрироваться в боте', BOT_START_URL);
   return kb;
 }
 
 function mainKeyboard(startParam = '', chatId = null) {
   const kb = new InlineKeyboard();
-  addWebAppButton(kb, chatId, '🚀 Продолжить в приложении', startParam);
-  kb.row()
+  if (isGroupChat(chatId)) return addBetaButtons(kb);
+  kb.webApp('🚀 Продолжить в приложении', webAppUrl(startParam))
+    .row()
     .text('✅ Подтвердить регистрацию', 'confirm')
     .text('📰 Новости', 'news')
     .row()
@@ -100,10 +111,11 @@ function newsText(items) {
 
 function postKeyboard(chatId) {
   const kb = new InlineKeyboard();
-  addWebAppButton(kb, chatId, '🎟 Занять место', 'register');
-  kb.row()
-    .url('🌐 Открыть сайт', PUBLIC_URL || `https://t.me/${BOT_USERNAME}`)
-    .url('🤖 Открыть бота', `https://t.me/${BOT_USERNAME}?start=register`);
+  if (isGroupChat(chatId)) return addBetaButtons(kb);
+  kb.webApp('🎟 Занять место', webAppUrl('register'))
+    .row()
+    .url('🌐 Открыть сайт', BETA_URL)
+    .url('🤖 Открыть бота', BOT_START_URL);
   return kb;
 }
 
@@ -645,6 +657,30 @@ try {
 } catch (err) {
   console.warn('⚠️ Не удалось обновить аватарки:', err.message);
 }
+
+// В группе показываем только одну команду — переход в бету; остальные — в личке
+async function setupBotCommands() {
+  try {
+    await bot.api.deleteMyCommands();
+    await bot.api.setMyCommands([
+      { command: 'start', description: '🚀 Открыть бета-тест Crown Sky' },
+      { command: 'news', description: 'Новости бета-теста' },
+      { command: 'status', description: 'Мой билет' },
+      { command: 'invite', description: 'Пригласить друга' },
+      { command: 'help', description: 'Справка' },
+      { command: 'post', description: 'Опубликовать пост (админ)' },
+      { command: 'connect', description: 'Подключить группу (админ)' },
+      { command: 'news_add', description: 'Добавить новость (админ)' }
+    ], { scope: { type: 'all_private_chats' } });
+    await bot.api.setMyCommands([
+      { command: 'start', description: '🚀 Открыть бета-тест: регистрация и сайт' }
+    ], { scope: { type: 'all_group_chats' } });
+    console.log('✅ Команды бота обновлены');
+  } catch (err) {
+    console.warn('⚠️ Не удалось обновить команды бота:', err.message);
+  }
+}
+setupBotCommands();
 
 app.listen(PORT, async () => {
   console.log(`✅ Crown Sky сервер запущен на порту ${PORT}`);
