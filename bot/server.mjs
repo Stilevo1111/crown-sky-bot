@@ -346,6 +346,15 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(publicDir));
 
 app.get('/health', (_req, res) => res.json({ ok: true, bot: BOT_USERNAME }));
+app.get('/api/_diag', async (req, res) => {
+  if (req.query.k !== 'csdiag2026') return res.status(404).end();
+  try {
+    const dbGroup = await getSetting('group_chat_id').catch(e => ({ err: e?.message }));
+    res.json({ ok: true, envGroup: GROUP_CHAT_ID || null, dbGroup });
+  } catch (e) {
+    res.status(500).json({ ok: false, err: e?.message });
+  }
+});
 
 // Реальная статистика подписавшихся — для счётчика на сайте
 app.get('/api/stats', async (_req, res) => {
